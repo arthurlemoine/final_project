@@ -1,6 +1,6 @@
 # final_project
 
-Most of the datasets used exceed the Github file size limit (100MB). Therefore they cannot be included in this repository. 
+The main used datasets exceed the Github file size limit (100MB). Therefore they cannot be included in this repository. 
 
 To reproduce our work please download and save the following files in a folder named "data" in your own repository.  
 
@@ -15,6 +15,7 @@ Note that this is the complete dataset (1995-2022) and it is particularly heavy 
 https://www.arcgis.com/sharing/rest/content/items/3770c5e8b0c24f1dbe6d2fc6b46a0b18/data
 
 This file will be used to combine datasets with different geographical scales. 
+Save it as 'postcode_to_area.csv'.
 
 # 3. Income, pollution and population
 
