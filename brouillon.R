@@ -36,6 +36,10 @@ df <- df |>
 
 ## REMOVE COL
 
+rd_df <- sample_n(df, 10000)
+
+write.csv(rd_df, "rd_df.csv", row.names=TRUE)
+
 pc2msoa <- pc2msoa |>
   select(pcds, msoa11cd, msoa11nm, ladnm)
 
