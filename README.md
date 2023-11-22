@@ -10,6 +10,8 @@ http://prod.publicdata.landregistry.gov.uk.s3-website-eu-west-1.amazonaws.com/pp
 
 Note that this is the complete dataset (1995-2022) and it is particularly heavy (28M observations / ~4.7Go)
 
+If you just want to have an idea about what our code look like you can always use the 'rd_df.csv' dataset (which is a random sample of 10 000 lines).
+
 # 2. Postcode to MLSOA (Middle Layer Super Output Area)
 
 https://www.arcgis.com/sharing/rest/content/items/3770c5e8b0c24f1dbe6d2fc6b46a0b18/data
