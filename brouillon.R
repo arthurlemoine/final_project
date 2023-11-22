@@ -14,7 +14,25 @@ here::i_am('final_project.Rproj')
 pc2msoa <- vroom(here("data", "postcode_to_area.csv"))
 income <- vroom(here("data", "income_2011_2019.csv"))
 pop_2011 <- vroom(here("data", "population2011.csv"))
-df <- vroom(here("data", "pp-complete.csv")) ## to implement: col_names = false + add a header vector 
+df <- vroom(here("data", "pp-complete.csv"), col_names = FALSE)
+
+df <- df |>
+  rename("unique_id" = 1,
+         "price_paid" = 2,
+         "deed_date" = 3,
+         "postcode" = 4,
+         "property_type" = 5,
+         "new_build" = 6,
+         "estate_type" = 7,
+         "saon" = 8,
+         "paon" = 9,
+         "street" = 10,
+         "locality" = 11,
+         "town" = 12,
+         "district" = 13,
+         "county" = 14,
+         "transaction_category" = 15,
+         "linked_data_uri" = 16)
 
 ## REMOVE COL
 
