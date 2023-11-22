@@ -34,6 +34,28 @@ df <- df |>
          "transaction_category" = 15,
          "linked_data_uri" = 16)
 
+## test
+
+rd_df <- sample_n(df, 10000)
+
+rd_df <- rd_df |> 
+  mutate(deed_date = lubridate::ymd(deed_date))
+
+rd_df <- rd_df |> 
+  mutate(year = format(deed_date, format="%Y"), 
+         month = format(deed_date, format="%m"))
+
+rd_df_sum <- rd_df |>
+  group_by(year) |>
+  summarise('nb_transac' = n(), 
+            'mean_price' = mean(price_paid))
+
+ggplot(rd_df_sum, aes(x = year, y = nb_transac)) + 
+  geom_point()
+
+ggplot(rd_df_sum, aes(x = year, y = mean_price)) + 
+  geom_point()
+
 ## REMOVE COL
 
 rd_df <- sample_n(df, 10000)
