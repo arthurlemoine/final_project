@@ -1,6 +1,6 @@
 # final_project
 
-The main used datasets exceed the Github file size limit (100MB). Therefore they cannot be included in this repository. 
+The main datasets used for this project exceed the Github file size limit (100MB). Therefore they cannot be included in this repository. 
 
 To reproduce our work please download and save the following files in a folder named "data" in your own repository.  
 
