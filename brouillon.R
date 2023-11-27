@@ -6,6 +6,7 @@ library(here)
 library(vroom)
 library(lubridate)
 library(ggplot2)
+library(stringr)
 
 ## LOAD DATA
 
@@ -85,6 +86,27 @@ ggplot(df_sum, aes(x = year, y = nb_transac)) +
 
 ggplot(df_sum, aes(x = year, y = mean_price)) + 
   geom_point()
+
+## Merge and clean pollution data
+
+pollution_2020 <- vroom(here("data", "pollution_2020.csv"))
+pollution_2021 <- vroom(here("data", "pollution_2021.csv"))
+pollution_2022 <- vroom(here("data", "pollution_2022.csv"))
+
+pollution_df <- bind_rows(pollution_2020, pollution_2021, pollution_2022)
+pollution_df <- select(pollution_df,c("objectid","name","unique_code","pollutant_metric","maximum_value"))
+pollution_df <- pollution_df %>%
+  mutate(pollutant_metric = str_replace_all(pollutant_metric, "PM10 annual mean Limit Value 2020","2020")) %>%
+  mutate(pollutant_metric = str_replace_all(pollutant_metric, "PM10 annual mean Limit Value 2021","2021")) %>%
+  mutate(pollutant_metric = str_replace_all(pollutant_metric, "PM10 annual mean Limit Value 2022","2022"))
+
+pollution_df <- pollution_df %>%
+  rename("year"="pollutant_metric")
+
+write.csv(pollution_df, "pollution_df.csv", row.names=TRUE)
+
+
+
 
 
 
