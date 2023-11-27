@@ -105,6 +105,46 @@ pollution_df <- pollution_df %>%
 
 write.csv(pollution_df, "pollution_df.csv", row.names=TRUE)
 
+income1112 <- vroom(here("data", "income1112.csv"), skip = 5, col_names = FALSE)
+income1314 <- vroom(here("data", "income1314.csv"), skip =5, col_names = FALSE)
+income1516 <- vroom(here("data", "income1516.csv"), skip = 5, col_names = FALSE, col_select = -c(11:14))
+income1718 <- vroom(here("data", "income1718.csv"), skip = 5, col_names = FALSE)
+income1920 <- vroom(here("data", "income1920.csv"), skip = 5, col_names = FALSE, delim = ";")
+
+income1112[,c(7:10)] <- income1112[,c(7:10)]*52
+income1314[,c(7:10)] <- income1314[,c(7:10)]*52
+income1920 <- income1920 %>%
+  mutate(X7 = str_replace_all(X7," ","")) %>%
+  mutate(X8 = str_replace_all(X8," ","")) %>%
+  mutate(X9 = str_replace_all(X9," ","")) %>%
+  mutate(X10 = str_replace_all(X10," ","")) %>%
+
+income1920$X7 <- as.numeric(income1920$X7)
+income1920$X8 <- as.numeric(income1920$X8)
+income1920$X9 <- as.numeric(income1920$X9)
+income1920$X10 <- as.numeric(income1920$X10)
+
+income1112 <- income1112 %>%
+  mutate(X11 = "2012")
+
+income1314 <- income1314 %>%
+  mutate(X11 = "2014")
+
+income1516 <- income1516 %>%
+  mutate(X11 = "2016")
+
+income1718 <- income1718 %>%
+  mutate(X11 = "2018")
+
+income1920 <- income1920 %>%
+  mutate(X11 = "2020")
+
+income_df <- bind_rows(income1112, income1314, income1516, income1718, income1920)
+
+variable_names <- c("MSOA_code","MSOA_name","local_authority_code","local_authority_name","region_code","region_name","total_annual_income","upper_confidence_limit","lower_confidence_limit","confidence_interval","year")
+
+colnames(income_df) <- variable_names
+
 
 
 
