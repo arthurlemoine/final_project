@@ -1,0 +1,217 @@
+---
+title: "Data cleaning"
+author: "Arthur Lemoine & Matteo Boyer-Wright"
+format: html
+execute: 
+  warning: false
+  error: false
+---
+
+## Loading libraries
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(here)
+library(vroom)
+library(lubridate)
+library(ggplot2)
+library(stringr)
+
+here::i_am('final_project.Rproj')
+```
+
+## Loading data
+
+### Optional - load full transaction dataset
+
+```{r}
+#| echo: false
+#| eval: false
+
+df <- vroom(here("data", "pp-complete.csv"), col_names = FALSE)
+
+df <- df |>
+  rename("unique_id" = 1,
+         "price_paid" = 2,
+         "deed_date" = 3,
+         "postcode" = 4,
+         "property_type" = 5,
+         "new_build" = 6,
+         "estate_type" = 7,
+         "saon" = 8,
+         "paon" = 9,
+         "street" = 10,
+         "locality" = 11,
+         "town" = 12,
+         "district" = 13,
+         "county" = 14,
+         "transaction_category" = 15,
+         "linked_data_uri" = 16)
+
+df <- df |> 
+  mutate(deed_date = lubridate::ymd(deed_date))
+
+df <- df |> 
+  mutate(year = format(deed_date, format="%Y"), 
+         month = format(deed_date, format="%m"))
+
+rd_df <- sample_n(df, 10000)
+
+df <- df |>
+  select(-1,-unique_id, -linked_data_uri) 
+```
+
+### Alternative - load random sample (10 000 lines)
+
+```{r}
+df <- vroom(here("data", "rd_df.csv"))
+df <- df |>
+  select(-1,-unique_id, -linked_data_uri) 
+```
+
+### Income data
+
+```{r}
+income1112 <- vroom(here("data", "income1112.csv"), skip = 5, col_names = FALSE)
+income1314 <- vroom(here("data", "income1314.csv"), skip = 5, col_names = FALSE)
+income1516 <- vroom(here("data", "income1516.csv"), skip = 5, col_names = FALSE, col_select = -c(11:14))
+income1718 <- vroom(here("data", "income1718.csv"), skip = 5, col_names = FALSE)
+income1920 <- vroom(here("data", "income1920.csv"), skip = 5, col_names = FALSE, delim = ";")
+```
+
+Data from years 2011/2012 and 2013/2014 are recorded as weekly and need to be transformed to annual. 
+```{r}
+income1112[,c(7:10)] <- income1112[,c(7:10)]*52
+income1314[,c(7:10)] <- income1314[,c(7:10)]*52
+```
+
+Fixing issue with Excel export introducing a blank space after the thousands.
+```{r}
+income1920 <- income1920 %>%
+  mutate(X7 = str_replace_all(X7," ","")) %>%
+  mutate(X8 = str_replace_all(X8," ","")) %>%
+  mutate(X9 = str_replace_all(X9," ","")) %>%
+  mutate(X10 = str_replace_all(X10," ",""))
+
+income1920$X7 <- as.numeric(income1920$X7)
+income1920$X8 <- as.numeric(income1920$X8)
+income1920$X9 <- as.numeric(income1920$X9)
+income1920$X10 <- as.numeric(income1920$X10)
+```
+
+Stacking the five datasets and naming columns
+```{r}
+income1112 <- income1112 %>%
+  mutate(X11 = 2012)
+income1314 <- income1314 %>%
+  mutate(X11 = 2014)
+income1516 <- income1516 %>%
+  mutate(X11 = 2016)
+income1718 <- income1718 %>%
+  mutate(X11 = 2018)
+income1920 <- income1920 %>%
+  mutate(X11 = 2020)
+
+income_df <- bind_rows(income1112, income1314, income1516, income1718, income1920)
+
+colnames(income_df) <- c("msoa",
+                    "MSOA_name",
+                    "local_authority_code",
+                    "local_authority_name",
+                    "region_code",
+                    "region_name",
+                    "total_annual_income",
+                    "upper_confidence_limit",
+                    "lower_confidence_limit",
+                    "confidence_interval",
+                    "year")
+```
+
+Data is recorded every two years and need to be duplicate for odd years and selecting columns
+```{r}
+income_df_odd <- income_df %>%
+  mutate(year = year - 1)
+
+income_df <- bind_rows(income_df, income_df_odd)
+
+income_df <- income_df |>
+  select(msoa, MSOA_name, region_name, total_annual_income, confidence_interval, year)
+```
+
+### Pollution data
+
+Loading and stacking the datasets
+```{r}
+pollution_2020 <- vroom(here("data", "pollution_2020.csv"))
+pollution_2021 <- vroom(here("data", "pollution_2021.csv"))
+pollution_2022 <- vroom(here("data", "pollution_2022.csv"))
+
+pollution_df <- bind_rows(pollution_2020, pollution_2021, pollution_2022)
+```
+
+Select and rename columns + takes the average
+```{r}
+pollution_df <- pollution_df |>
+  select(c("objectid",
+           "name",
+           "unique_code",
+           "pollutant_metric",
+           "maximum_value"))
+
+pollution_df <- pollution_df %>%
+  mutate(pollutant_metric = str_replace_all(pollutant_metric, "PM10 annual mean Limit Value 2020","2020")) %>%
+  mutate(pollutant_metric = str_replace_all(pollutant_metric, "PM10 annual mean Limit Value 2021","2021")) %>%
+  mutate(pollutant_metric = str_replace_all(pollutant_metric, "PM10 annual mean Limit Value 2022","2022"))
+
+pollution_df <- pollution_df %>%
+  rename("year"="pollutant_metric", "msoa"="unique_code")
+
+pollution_df <- pollution_df %>%
+  group_by(msoa) %>%
+  summarize(mean(maximum_value))
+```
+
+### Population data
+
+Load and rename
+```{r}
+population_df <- vroom(here("data", "population2011.csv"), skip = 1, col_names = FALSE)
+
+population_df <- population_df %>%
+  select(-3,-4) %>%
+  rename("postcode" = "X1", "population" = "X2", "households" = "X5")
+```
+
+### Postcode to area
+
+```{r}
+postcode_df <- vroom(here("data", "postcode_to_area.csv"))
+
+postcode_df <- postcode_df |>
+  select(pcds, msoa21cd, ladnm) |>
+  rename("postcode" = "pcds",
+         "msoa" = "msoa21cd", 
+         "local_authority_name" = "ladnm" )
+```
+
+## Merge to final dataframe
+
+```{r}
+final_df <- df
+
+final_df <- final_df %>%
+  left_join(postcode_df, by = "postcode")
+
+final_df <- final_df %>%
+  left_join(population_df, by = "postcode")
+
+final_df <- final_df %>%
+  left_join(income_df, by = c("msoa","year"))
+
+final_df <- final_df %>%
+  left_join(pollution_df, by = "msoa")
+
+knitr::kable(final_df)
+```
+

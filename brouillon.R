@@ -94,6 +94,7 @@ pollution_2021 <- vroom(here("data", "pollution_2021.csv"))
 pollution_2022 <- vroom(here("data", "pollution_2022.csv"))
 
 pollution_df <- bind_rows(pollution_2020, pollution_2021, pollution_2022)
+
 pollution_df <- select(pollution_df,c("objectid","name","unique_code","pollutant_metric","maximum_value"))
 pollution_df <- pollution_df %>%
   mutate(pollutant_metric = str_replace_all(pollutant_metric, "PM10 annual mean Limit Value 2020","2020")) %>%
@@ -154,6 +155,9 @@ income_df_odd <- income_df %>%
 
 income_df <- bind_rows(income_df, income_df_odd)
 
+income_df <- income_df |>
+  select(msoa, MSOA_name, region_name, total_annual_income, confidence_interval, year)
+
 write.csv(income_df, "income_df.csv", row.names=TRUE)
 
 ## Matching postocode to area
@@ -164,16 +168,13 @@ postcode_df <- pc2msoa %>%
 
 ## Matching all the datasets with the main data
 
-final_df <- vroom(here("data", "rd_df.csv"))
+final_df <- vroom(here("rd_df.csv"))
 
 final_df <- final_df |>
   select(-1,-unique_id, -linked_data_uri) 
 
 final_df <- final_df %>%
   left_join(postcode_df, by = "postcode")
-
-final_df <- final_df %>%
-  left_join(income_df, by = c("msoa","year"))
 
 final_df <- final_df %>%
   left_join(income_df, by = c("msoa","year"))
