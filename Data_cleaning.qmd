@@ -355,24 +355,39 @@ knitr::kable(info_df2, caption = "Main descriptive statistics", align = "lrrrrrr
 
 ```{r}
 
-final_df %>%
+graph_df <- final_df %>%
   group_by(year) %>%
-  summarise(num_transactions = n(),mean_price = mean(price_paid)) %>%
+  summarise(num_transactions = n(),mean_price = mean(price_paid))
   
-stat_per_year2 <- stat_per_year |>
-  pivot_longer(cols = mean_liveness:mean_danceability, names_to="variable", values_to="mean_value")
+graph_df <- graph_df |>
+  pivot_longer(cols = num_transactions:mean_price, names_to="variable", values_to="value")
 
-ggplot(stat_per_year2, aes(year, mean_value, group = variable, color = variable))+ geom_line() + xlab("Year") + ylab("Mean annual value") + labs(title ="Temporal evolution of the mean annual liveness and the mean annual danceability")
+ggplot(graph_df, aes(x = year, y = value)) + 
+  geom_line() + 
+  facet_wrap(~variable, scales = "free", ncol = 1) 
 ```
 
 
 ## Research question
 
-Through this report, we want to explore the determinants of real estate transactions in England and Wales. We will do so by utilizing a diverse set of variables such as the location of the property, type of property, average income in the area, population density, and air quality.
+Through this report, we want to explore the determinants of real estate transactions in England and Wales. We will do so by utilizing a diverse set of variables from a variety of government souces. 
 
 Research Question:
 
-What factors contribute to the variation in real estate transactions in the United Kingdom, and to what extent do the location of the property, type of property, average income in the area, population density, and air quality influence these transactions?
+What factors contribute to the variation in the number of real estate transactions in the United Kingdom, and to what extent do the location of the property, type of property, average income in the area, population density, and air quality influence these transactions?
+
+First findings and proposal of further analysis: 
+
+There is a clear drop in the number of transactions around the financial crisis of 2007. This was preceded by a stagnation in the average yearly price. The Quantitative Easing starting in 2015 could also explain the price peaking in the same year. 
+
+Moreover, The number of transactions plummets in 2020 due to the covid crisis and is followed by a substantial rebound in 2021. Finally, it seems the year 2022 cannot be taken into account because we are missign data from the last months. 
+
+Our future analysis will focus on: 
+
+1) Producing a geographical analysis (using several maps and population density). 
+2) Correcting the price evolution by the inflation rate. 
+3) Look for seasonality in the evolution of price and number of transactions. 
+4) Find correlations between socio-economic/environmental factors and our variables of interest. 
 
 
 
