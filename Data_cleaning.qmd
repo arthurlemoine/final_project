@@ -165,11 +165,11 @@ pollution_df <- pollution_df %>%
   mutate(pollutant_metric = str_replace_all(pollutant_metric, "PM10 annual mean Limit Value 2022","2022"))
 
 pollution_df <- pollution_df %>%
-  rename("year"="pollutant_metric", "msoa"="unique_code")
+  rename("year"="pollutant_metric", "msoa"="unique_code", "local_authority_name"="name")
 
 pollution_df <- pollution_df %>%
-  group_by(msoa) %>%
-  summarize(mean(maximum_value))
+  group_by(local_authority_name) %>%
+  summarize('PM10' = mean(maximum_value))
 ```
 
 ### Population data
@@ -210,7 +210,7 @@ final_df <- final_df %>%
   left_join(income_df, by = c("msoa","year"))
 
 final_df <- final_df %>%
-  left_join(pollution_df, by = "msoa")
+  left_join(pollution_df, by = "local_authority_name")
 
 knitr::kable(final_df)
 ```
