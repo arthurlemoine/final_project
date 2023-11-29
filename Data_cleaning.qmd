@@ -73,8 +73,6 @@ The income data is provided as well by the ONS, through bulletin published every
 
 Eventually, the air pollution data is provided by UK-AIR, a body in charge of monitoring air quality in the UK on behalf of the UK Department for Environment, Food & Rural Affairs and the Devolved Administrations.
 
-##
-
 ## Loading libraries
 
 ```{r}
@@ -95,7 +93,6 @@ here::i_am('final_project.Rproj')
 
 ```{r}
 #| echo: false
-#| eval: false
 
 df <- vroom(here("data", "pp-complete.csv"), col_names = FALSE)
 
@@ -121,10 +118,10 @@ df <- df |>
   mutate(deed_date = lubridate::ymd(deed_date))
 
 df <- df |> 
-  mutate(year = format(deed_date, format="%Y"), 
-         month = format(deed_date, format="%m"))
+  mutate(year = as.numeric(format(deed_date, format="%Y")), 
+         month = as.numeric(format(deed_date, format="%m")))
 
-rd_df <- sample_n(df, 10000)
+#rd_df <- sample_n(df, 10000)  #Uncomment if you want to redraw a sample of the data
 
 df <- df |>
   select(-1,-unique_id, -linked_data_uri) 
@@ -335,7 +332,13 @@ residential and non-residential. Y = a newly built property, N = an established 
 
 16) `r colnames(final_df[,16])` is a 95% confidence interval for the income variable. It represents a range of values that a measure can take, based on statistical uncertainty and the fact that the data were derived from a sample of households across the country.
 
-##
+## Dataset information and descriptive statistics
+
+```{r}
+info_df <- final_df %>%
+  summarize("Number of cities"
+```
+
 
 
 
