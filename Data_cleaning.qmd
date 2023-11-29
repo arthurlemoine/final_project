@@ -83,6 +83,7 @@ library(vroom)
 library(lubridate)
 library(ggplot2)
 library(stringr)
+library(knitr)
 
 here::i_am('final_project.Rproj')
 ```
@@ -92,7 +93,7 @@ here::i_am('final_project.Rproj')
 ### Optional - load full transaction dataset
 
 ```{r}
-#| echo: false
+#| eval: false
 
 df <- vroom(here("data", "pp-complete.csv"), col_names = FALSE)
 
@@ -130,6 +131,7 @@ df <- df |>
 ### Alternative - load random sample (10 000 lines)
 
 ```{r}
+#| eval: false
 df <- vroom(here("data", "rd_df.csv"))
 df <- df |>
   select(-1,-unique_id, -linked_data_uri) 
@@ -247,7 +249,7 @@ population_df <- population_df %>%
   select(-3,-4) %>%
   rename("postcode" = "X1", "population" = "X2", "households" = "X5")
 
-write.csv(population_df,here("data","population_df.csv"))
+#write.csv(population_df,here("data","population_df.csv"))
 ```
 
 ### Postcode to area
@@ -336,7 +338,18 @@ residential and non-residential. Y = a newly built property, N = an established 
 
 ```{r}
 info_df <- final_df %>%
-  summarize("Number of cities"
+  summarize("Number of cities" = n_distinct(town), "Number of districts" = n_distinct(district), "Number of counties" = n_distinct(county))
+
+info_df2 <- final_df %>%
+  select(price_paid,year,population,households,total_annual_income,PM10) %>%
+  summarize_all(list(mean = mean, median = median, min = min, max = max),na.rm = TRUE) %>%
+  pivot_longer(cols = everything(), names_to = c(".value", "variable"), names_pattern = "(.+)_(.+)") 
+
+knitr::kable(info_df, align = "ccc", digits = 0)
+
+knitr::kable(info_df2, caption = "Main descriptive statistics", align = "lrrrrrr", digits = 0)
+
+
 ```
 
 
