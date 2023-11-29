@@ -211,7 +211,5 @@ final_df <- final_df %>%
 
 final_df <- final_df %>%
   left_join(pollution_df, by = "local_authority_name")
-
-knitr::kable(final_df)
 ```
 
