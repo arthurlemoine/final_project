@@ -38,13 +38,13 @@ Save it as 'postcode_to_area.csv'.
 Those datasets (pre-processed) are available directly from our Github. 
 If you want the raw initial data please download and merge the following datasets. 
 
-- Pollution (3 files to be merged and add a column year):
+- Pollution:
 
 * https://compliance-data.defra.gov.uk/datasets/Defra::pm10-annual-mean-local-authority-2020/
 * https://compliance-data.defra.gov.uk/datasets/Defra::pm10-annual-mean-local-authority-2021/
 * https://compliance-data.defra.gov.uk/datasets/Defra::pm10-annual-mean-local-authority-2022/
 
-- Population (single file):
+- Population:
 
 * https://www.nomisweb.co.uk/census/2011/postcode_headcounts_and_household_estimates
 
@@ -76,6 +76,8 @@ Eventually, the air pollution data is provided by UK-AIR, a body in charge of mo
 ## Loading libraries
 
 ```{r}
+#| echo: false
+
 library(dplyr)
 library(tidyr)
 library(here)
@@ -93,7 +95,7 @@ here::i_am('final_project.Rproj')
 ### Optional - load full transaction dataset
 
 ```{r}
-#| eval: false
+#| eval: true
 
 df <- vroom(here("data", "pp-complete.csv"), col_names = FALSE)
 
@@ -131,7 +133,7 @@ df <- df |>
 ### Alternative - load random sample (10 000 lines)
 
 ```{r}
-#| eval: true
+#| eval: false
 df <- vroom(here("data", "rd_df.csv"))
 df <- df |>
   select(-1,-unique_id, -linked_data_uri) 
@@ -140,6 +142,8 @@ df <- df |>
 ### Income data
 
 ```{r}
+#| echo: false
+
 income1112 <- vroom(here("data", "income1112.csv"), skip = 5, col_names = FALSE)
 income1314 <- vroom(here("data", "income1314.csv"), skip = 5, col_names = FALSE)
 income1516 <- vroom(here("data", "income1516.csv"), skip = 5, col_names = FALSE, col_select = -c(11:14))
@@ -210,6 +214,8 @@ income_df <- income_df |>
 
 Loading and stacking the datasets
 ```{r}
+#| echo: false
+
 pollution_2020 <- vroom(here("data", "pollution_2020.csv"))
 pollution_2021 <- vroom(here("data", "pollution_2021.csv"))
 pollution_2022 <- vroom(here("data", "pollution_2022.csv"))
@@ -243,6 +249,7 @@ pollution_df <- pollution_df %>%
 
 Load and rename
 ```{r}
+#| echo: false
 population_df <- vroom(here("data", "population2011.csv"), skip = 1, col_names = FALSE)
 
 population_df <- population_df %>%
@@ -255,6 +262,8 @@ population_df <- population_df %>%
 ### Postcode to area
 
 ```{r}
+#| echo: false
+
 postcode_df <- vroom(here("data", "postcode_to_area.csv"))
 
 postcode_df <- postcode_df |>
@@ -298,6 +307,7 @@ final_df <- final_df %>%
 ## Clearing the environment
 
 ```{r}
+#| echo: false
 
 saveRDS(final_df,here("data","final_df.rds"))
 
@@ -336,24 +346,32 @@ residential and non-residential. Y = a newly built property, N = an established 
 
 ## Dataset information and descriptive statistics
 
+Our main dataset consists of the description of `r nrow(final_df)` real estate transactions using `r ncol(final_df)` variables.
+
 ```{r}
+#| echo: false
+
 info_df <- final_df %>%
   summarize("Number of cities" = n_distinct(town), "Number of districts" = n_distinct(district), "Number of counties" = n_distinct(county))
 
 info_df2 <- final_df %>%
   select(price_paid,year,population,households,total_annual_income,PM10) %>%
   summarize_all(list(mean = mean, median = median, min = min, max = max),na.rm = TRUE) %>%
-  pivot_longer(cols = everything(), names_to = c(".value", "variable"), names_pattern = "(.+)_(.+)") 
+  pivot_longer(cols = everything(), names_to = c(".value", "variable"), names_pattern = "(.+)_(.+)")
+
+example_df <- final_df %>%
+  head(n=10)
+
+knitr::kable(example_df, digits = 0)
 
 knitr::kable(info_df, align = "ccc", digits = 0)
 
 knitr::kable(info_df2, caption = "Main descriptive statistics", align = "lrrrrrr", digits = 0)
-
-
 ```
 ## Graphical representation of our main variable
 
 ```{r}
+#| echo: false
 
 graph_df <- final_df %>%
   group_by(year) %>%
