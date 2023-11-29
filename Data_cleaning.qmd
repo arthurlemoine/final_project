@@ -131,7 +131,7 @@ df <- df |>
 ### Alternative - load random sample (10 000 lines)
 
 ```{r}
-#| eval: false
+#| eval: true
 df <- vroom(here("data", "rd_df.csv"))
 df <- df |>
   select(-1,-unique_id, -linked_data_uri) 
@@ -326,13 +326,13 @@ residential and non-residential. Y = a newly built property, N = an established 
 
 11) `r colnames(final_df[,11])` indicates the Middle Layer Super Output Areas (MSOA), which is a geographic hierarchy designed to improve the reporting of small area statistics in England and Wales. The minimum population is 5000 and the mean is 7200.
 
-12 and 13) `r colnames(final_df[,12])` and `r colnames(final_df[,13])` refers to the number of people and households sharing the same postcode. Even if those variables contains a lot of NAs (`r count(is.na(final_df$population` NAs), when we sum across all postcodes we obtain a total population of `r sum(population_df$population`, which is roughly equal to the total population of England and Wales in 2011.
+12 and 13) `r colnames(final_df[,12])` and `r colnames(final_df[,13])` refers to the number of people and households sharing the same postcode. Even if those variables contains a lot of NAs (`r sum(is.na(final_df$population))` NAs), when we sum across all postcodes we obtain a total population of `r sum(population_df$population)`, which is roughly equal to the total population of England and Wales in 2011.
 
 14) `r colnames(final_df[,14])` refers to the mean household disposable (net) income on an equivalised basis for middle layer super output areas (MSOAs) in England and Wales. Equivalisation is the process of accounting for the fact that households with many members are likely to need a higher income to achieve the same standard of living as households with fewer members.
 
-15) `r colnames(final_df[,15])`
+15) `r colnames(final_df[,15])` is a 95% confidence interval for the income variable. It represents a range of values that a measure can take, based on statistical uncertainty and the fact that the data were derived from a sample of households across the country.
 
-16) `r colnames(final_df[,16])` is a 95% confidence interval for the income variable. It represents a range of values that a measure can take, based on statistical uncertainty and the fact that the data were derived from a sample of households across the country.
+16) `r colnames(final_df[,16])` is a local measure of air pollution. Precisely, it measures the annual average across years from 2020 to 2022 of the air concentration in particulate matter (PM) of less than 10 µm in diameter
 
 ## Dataset information and descriptive statistics
 
@@ -351,6 +351,28 @@ knitr::kable(info_df2, caption = "Main descriptive statistics", align = "lrrrrrr
 
 
 ```
+## Graphical representation of our main variable
+
+```{r}
+
+final_df %>%
+  group_by(year) %>%
+  summarise(num_transactions = n(),mean_price = mean(price_paid)) %>%
+  
+stat_per_year2 <- stat_per_year |>
+  pivot_longer(cols = mean_liveness:mean_danceability, names_to="variable", values_to="mean_value")
+
+ggplot(stat_per_year2, aes(year, mean_value, group = variable, color = variable))+ geom_line() + xlab("Year") + ylab("Mean annual value") + labs(title ="Temporal evolution of the mean annual liveness and the mean annual danceability")
+```
+
+
+## Research question
+
+Through this report, we want to explore the determinants of real estate transactions in England and Wales. We will do so by utilizing a diverse set of variables such as the location of the property, type of property, average income in the area, population density, and air quality.
+
+Research Question:
+
+What factors contribute to the variation in real estate transactions in the United Kingdom, and to what extent do the location of the property, type of property, average income in the area, population density, and air quality influence these transactions?
 
 
 
