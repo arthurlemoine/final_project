@@ -86,6 +86,7 @@ library(lubridate)
 library(ggplot2)
 library(stringr)
 library(knitr)
+library(zoo)
 
 here::i_am('final_project.Rproj')
 ```
@@ -301,7 +302,108 @@ final_df <- final_df %>%
          -MSOA_name,
          -region_name)
 
+saveRDS(final_df, here("data","full_final_df.rds"))
 ```
+
+
+## Time series dataframe
+### Import data and formating
+```{r}
+bank_rate_df <- vroom(here('data', 'bank_rate.csv'), delim = ',')
+inflation_df <- vroom(here('data', 'inflation.csv'), col_names = FALSE, skip = 287, delim =',')
+
+inflation_df <- inflation_df %>% 
+  mutate(date = as.Date(paste0(X1, 1), format= "%Y %b%d")) %>%
+  mutate(year = as.numeric(format(date, format="%Y")), 
+         month = as.numeric(format(date, format="%m"))) %>%
+  mutate(CPI = (X2)/(X2[1:1])*100) %>%
+  select(year, month, CPI)
+
+bank_rate_df <- bank_rate_df %>%
+  slice(0:72) %>%
+  mutate(date = as.Date(`Date Changed`, format=("%d %b %y"))) %>%
+  mutate(year = as.numeric(format(date, format="%Y")), 
+         month = as.numeric(format(date, format="%m"))) %>%
+  select(year, month, "rate"=Rate)
+```
+### Merging
+```{r}
+time_df <- inflation_df %>%
+  left_join(bank_rate_df, by = c("year","month")) %>%
+  na.locf(na.rm=FALSE)
+
+time_df[1,4] = 6.13
+
+final_df <- readRDS(here('data', 'full_final_df.rds'))
+
+price_nb_df <- final_df %>%
+  group_by(year, month) %>%
+  summarise(nb_transac = n(),
+            mean_price = mean(price_paid))
+
+price_nb_df <- price_nb_df %>%
+  mutate(month, month = as.numeric(month))
+
+time_df <- time_df %>%
+  left_join(price_nb_df, by = c("year", "month"))
+
+time_df <- time_df %>%
+  mutate(real_price = (time_df$mean_price/time_df$CPI)*100) %>%
+  mutate(date = lubridate::make_date(year = time_df$year, month = time_df$month, day = 1)) %>%
+  select(-month, -year)
+
+saveRDS(time_df, here("data","full_time_df.rds"))
+```
+
+
+```{r}
+ggplot(time_df, aes(x=date)) +
+  geom_line(aes(y = mean_price), color="steelblue") + 
+  geom_line(aes(y = real_price), color="darkred")
+
+ggplot(time_df, aes(x=date)) +
+  geom_line(aes(y = nb_transac), color="steelblue")
+```
+## Population by MSOA
+```{r}
+pop_by_msoa <- postcode_df %>%
+  left_join(population_df, by = "postcode")
+
+pop_by_msoa <- pop_by_msoa %>%
+  group_by(msoa) %>%
+  mutate(pop = sum(population, na.rm=TRUE)) %>%
+  na.omit() %>%
+  distinct(msoa, .keep_all = TRUE) %>%
+  select(-c("population", "postcode", "households"))
+```
+
+## MAP
+
+```{r}
+transac_msoa <- final_df %>%
+  group_by(year, msoa) %>%
+  summarise(mean_price = mean(price_paid), 
+            nb_transac = n())
+
+```
+
+
+```{r}
+library(geojsonio)
+ukmap <- geojson_read(here('uk_local_areas', 'uk_la.geojson'), what = "sp")
+
+
+library(broom)
+ukmap_f <- tidy(ukmap)
+```
+
+```{r}
+ggplot() +
+  geom_polygon(data = ukmap_f, aes( x = long, y = lat, group = group), fill="blue", color="black") +
+  theme_void() +
+  coord_map()
+```
+
 
 
 ## Clearing the environment
