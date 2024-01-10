@@ -268,10 +268,11 @@ population_df <- population_df %>%
 postcode_df <- vroom(here("data", "postcode_to_area.csv"))
 
 postcode_df <- postcode_df |>
-  select(pcds, msoa21cd, ladnm) |>
+  select(pcds, msoa21cd, ladnm, ladcd) |>
   rename("postcode" = "pcds",
          "msoa" = "msoa21cd", 
-         "local_authority_name" = "ladnm" )
+         "local_authority_name" = "ladnm",
+         "local_authority_code" = "ladcd")
 ```
 
 ## Merge to final dataframe and selection of the useful variables
@@ -334,8 +335,6 @@ time_df <- inflation_df %>%
 
 time_df[1,4] = 6.13
 
-final_df <- readRDS(here('data', 'full_final_df.rds'))
-
 price_nb_df <- final_df %>%
   group_by(year, month) %>%
   summarise(nb_transac = n(),
@@ -354,16 +353,6 @@ time_df <- time_df %>%
 
 saveRDS(time_df, here("data","full_time_df.rds"))
 ```
-
-
-```{r}
-ggplot(time_df, aes(x=date)) +
-  geom_line(aes(y = mean_price), color="steelblue") + 
-  geom_line(aes(y = real_price), color="darkred")
-
-ggplot(time_df, aes(x=date)) +
-  geom_line(aes(y = nb_transac), color="steelblue")
-```
 ## Population by MSOA
 ```{r}
 pop_by_msoa <- postcode_df %>%
@@ -375,35 +364,9 @@ pop_by_msoa <- pop_by_msoa %>%
   na.omit() %>%
   distinct(msoa, .keep_all = TRUE) %>%
   select(-c("population", "postcode", "households"))
+
+saveRDS(pop_by_msoa, here("data", "pop_by_msoa.rds"))
 ```
-
-## MAP
-
-```{r}
-transac_msoa <- final_df %>%
-  group_by(year, msoa) %>%
-  summarise(mean_price = mean(price_paid), 
-            nb_transac = n())
-
-```
-
-
-```{r}
-library(geojsonio)
-ukmap <- geojson_read(here('uk_local_areas', 'uk_la.geojson'), what = "sp")
-
-
-library(broom)
-ukmap_f <- tidy(ukmap)
-```
-
-```{r}
-ggplot() +
-  geom_polygon(data = ukmap_f, aes( x = long, y = lat, group = group), fill="blue", color="black") +
-  theme_void() +
-  coord_map()
-```
-
 
 
 ## Clearing the environment
@@ -411,13 +374,13 @@ ggplot() +
 ```{r}
 #| echo: false
 
-saveRDS(final_df,here("data","final_df.rds"))
+# saveRDS(final_df,here("data","final_df.rds"))
 
 rm(list=ls())
 
 population_df <- vroom(here("data", "population_df.csv"))
 
-final_df <- readRDS(here("data","final_df.rds"))
+# final_df <- readRDS(here("data","final_df.rds"))
 
 ```
 
@@ -508,8 +471,6 @@ Our future analysis will focus on:
 2) Correcting the price evolution by the inflation rate. 
 3) Look for seasonality in the evolution of price and number of transactions. 
 4) Find correlations between socio-economic/environmental factors and our variables of interest. 
-
-
 
 
 
