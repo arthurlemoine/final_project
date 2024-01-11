@@ -1,0 +1,97 @@
+---
+title: "copie_matteo"
+author: "Arthur Lemoine & Matteo Boyer-Wright"
+format: html
+execute: 
+  warning: false
+  error: false
+---
+
+```{r}
+
+library(here)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(here)
+library(vroom)
+library(lubridate)
+library(ggplot2)
+library(stringr)
+
+data_rd_final <- readRDS(here("data", "final_df.rds"))
+
+time_df <- readRDS(here("data", "full_time_df.rds"))
+```
+
+```{r}
+
+ggplot(time_df, aes(x = date, y = nb_transac)) + geom_line(color = "blue")
+```
+
+
+
+```{r}
+
+library(urca)
+
+ts1 <- na.remove(time_df$nb_transac)
+summary(ur.df(ts1, lags = 12, selectlags = c("AIC")))
+
+
+```
+
+```{r}
+
+ts2 <- diff(ts1,lag = 12)
+df_ts2 <- data.frame(ts2, time_df$date[13:length(ts1)])
+colnames(df_ts2) <- c("ts2", "date")
+  
+ggplot(df_ts2,aes(x = date , y = ts2)) + geom_line(color = "blue")
+
+summary(ur.df(ts2, lags = 12, selectlags = c("AIC")))
+
+```
+```{r}
+library(seastests)
+
+summary(combined_test(ts1, freq = 12))
+
+summary(combined_test(ts2, freq = 12))
+```
+
+```{r}
+ts1_bis <- ts(ts1, frequency = 12, start = c(1995,1))
+ts1_bis_components <- decompose(ts1_bis)
+plot(ts1_bis_components)
+```
+
+```{r}
+
+price <- data_rd_final$price_paid
+
+k.out <- kmeans(price, 10, nstart=50)
+k.out$cluster
+k.out
+
+data_rd_final <- data.frame(data_rd_final, k.out$cluster)
+
+find_mode <- function(x) {
+  u <- unique(x)
+  tab <- tabulate(match(x, u))
+  u[tab == max(tab)]
+}
+
+test <- data_rd_final %>%
+  group_by(county) %>%
+  summarise(mode = find_mode(k.out.cluster))
+```
+
+```{r}
+summary(lm(total_annual_income~PM10,data=data_rd_final))
+
+summary(lm(PM10~population,data=data_rd_final))
+
+summary(lm(real_price~nb_transac,data=time_df))
+```
+
