@@ -2,10 +2,17 @@
 title: "copie_matteo"
 author: "Arthur Lemoine & Matteo Boyer-Wright"
 format: html
+      toc: true
+      number_sections : true
 execute: 
   warning: false
   error: false
 ---
+
+<style>
+body {
+text-align: justify}
+</style>
 
 ```{r}
 
@@ -23,23 +30,66 @@ data_rd_final <- readRDS(here("data", "final_df.rds"))
 
 time_df <- readRDS(here("data", "full_time_df.rds"))
 ```
+# Seasonality study
+
+First, we want to investigate the possibility of a seasonal trend in the number of transactions per month. Using our main dataset, we have created a time series containing the number of transactions each month from 1995 to 2023.
+
+## Graphical analysis (1)
+
+We start by plotting this time series to see if there seems to be seasonality in our data:
 
 ```{r}
 
-ggplot(time_df, aes(x = date, y = nb_transac)) + geom_line(color = "blue")
+ggplot(time_df, aes(x = date, y = nb_transac)) + geom_line(color = "blue")+ labs(title = "Figure 1: time series of the number of monthly transactions") + xlab("Time") + ylab("Number of transactions")
 ```
+Just by studying graphically the time series, we are inclined to conclude that it is highly likely that the number of transactions per month is affected by a seasonality phenomena.
 
+The general pattern is especially clear between 2000 and 2005 for instance. The number of transactions is at its lowest every beginning of a new year, and rises sharply until it reaches its highest point around what is likely the end of spring and the summer (a more rigorous study of the patterns will be done later on). Then it drops dramatically until December, to start the new year at a low point.
 
+However, this graphical analysis in itself is not sufficient to conclude with certainty that the time series has a seasonal trend. We will then proceed with more rigorous tests in order to detect seasonality.
+
+## Testing for seasonality (1)
+### ADF test (1)
+
+We begin with an Augmented Dickey Fuller test. Even though we are aware that the ADF test is not a seasonality test per se, our idea behind this is that if we are unable to detect stationarity in our initial time series, and then, if after de-trending the seasonality in our time series by using a twelfth difference filter (because we use monthly data), we are able to detect stationarity, we can conclude that we have corrected the time series of its seasonal trend component, and that our initial time series is affected by seasonality.
+
+Formally, the ADF test is a unit root test. Imagine we have a time series model of the following form :
+
+$$ Y_t = \mu + \alpha Y_{t-1} + \epsilon_t \quad \textrm{AR(1)} $$
+
+The hypothesis for the simple Dickey-Fuller test would be:
+
+$$ H_0: \alpha = 1 \quad \textrm{versus} \quad H_A: \alpha \neq 1 $$
+
+And more generally, for any ARIMA model, we can apply the same principle but including high order regressive process in our model equation using the ADF test, with a model of the form: 
+
+$$ Y_t = \mu + \beta t +  \alpha Y_{t-1} + \phi_{1}\Delta Y_{t-1} + \phi_{2}\Delta Y_{t-2} + \quad \textrm{...} \quad + \phi_{p}\Delta Y_{t-p} + \epsilon_t \quad $$
+Where $\mu$ denotes the drift of the process, and $t$ the trend.
+
+The hypothesis remains the same, and can be understood as:
+
+$$ H_0: \quad \textrm{The time series is non-stationary} \quad \textrm{versus} \quad  H_A: \textrm{The time series is stationary} $$
+Now to the test. We use the function 'ur.df' of the 'urca' package to realize the test. Note that we select the relevant time series model (ie which order of lags should we select) by discriminating among different high order regressive process models using the Akaike Information Criterion. We only allow for models up to the twelth order, because we have monthly data. We include a drift but no trend because there does not seem to be a general trend over the whole period when we look at the time series graphically.
+
+The regression and test's results are:
 
 ```{r}
 
 library(urca)
 
-ts1 <- na.remove(time_df$nb_transac)
-summary(ur.df(ts1, lags = 12, selectlags = c("AIC")))
+ts1 <- na.omit(time_df$nb_transac)
+summary(ur.df(ts1, type = "drift", lags = 12, selectlags = c("AIC")))
 
-
+results <- summary(ur.df(ts1, type = "drift", lags = 12, selectlags = c("AIC")))
 ```
+
+We see that the selected best model according to the AIC is the model going up to the twelth order. Because our t-stat (round(`r results@teststat[2]`),2) for the $\alpha$ component of the estimated model is lower in absolute value compared to the 5% critical value of the associated distribution (`r results@cval[2,3]`), we fail to reject $H_0$ at the 5% level of significance, ie we cannot conclude that our time series is stationnary.
+
+## Graphical analysis (2)
+
+Now let us de-trend the possible seasonal part of the process by applying a twelth order difference filter.
+
+First, we plot this corrected time series:
 
 ```{r}
 
@@ -47,11 +97,36 @@ ts2 <- diff(ts1,lag = 12)
 df_ts2 <- data.frame(ts2, time_df$date[13:length(ts1)])
 colnames(df_ts2) <- c("ts2", "date")
   
-ggplot(df_ts2,aes(x = date , y = ts2)) + geom_line(color = "blue")
-
-summary(ur.df(ts2, lags = 12, selectlags = c("AIC")))
+ggplot(df_ts2,aes(x = date , y = ts2)) + geom_line(color = "blue") + labs(title = "Figure 2: time series of the number of monthly transactions (using a twelth order difference filter)") + xlab("Time") + ylab("Number of transactions (twelth order difference)") + theme(text = element_text(size = 9))
 
 ```
+Graphically, it seems like we have no seasonal trend anymore. We are unable to visually detect a seasonal pattern.
+
+## Testing seasonality (2)
+### ADF test (2)
+
+Then, we proceed with the ADF test, using again the same method for picking up the appropriate model in terms of regressive process order.
+
+```{r}
+
+summary(ur.df(ts2, type = "drift", lags = 12, selectlags = c("AIC")))
+
+results2 <- summary(ur.df(ts2, type = "drift", lags = 12, selectlags = c("AIC")))
+
+```
+
+Again, we see that the selected best model according to the AIC is the model going up to the twelth order. Because our t-stat (`r results@teststat[2]`) for the $\alpha$ component of the estimated model is now higer in absolute value compared to the 5% critical value of the associated distribution (`r results@cval[2,3]`), we reject $H_0$ at the 5% level of significance, ie we conclude that our time series is now stationnary.
+
+This first test seems to indicate that the number of transactions has a seasonal pattern. However, we are aware that the ADF test is not a proper time series seasonality test. We want to reinforce this first result by using a real seasonality test.
+
+## WO combined seasonality test
+
+We use the 'seastests' package, developped by Daniel Ollech from the Bundesbank. The package documentation is available at https://cran.r-project.org/web/packages/seastests/seastests.pdf. We realize the Ollech-Webel overall seasonality test that combines result from two seasonality tests, the QS test and the KW-test. The test hypothesis are: 
+
+$$ H_0: \quad \textrm{The time series does not have a seasonal trend} \quad \textrm{versus} \quad  H_A: \textrm{The time series has a seasonal trend} $$
+
+The results are: 
+
 ```{r}
 library(seastests)
 
@@ -59,39 +134,65 @@ summary(combined_test(ts1, freq = 12))
 
 summary(combined_test(ts2, freq = 12))
 ```
+We see that the OW combined seasonality test identifies seasonality in the first time series, but does not identify seasonality in the second time series with a twelth order difference filter. This furthers reinforce our belief that the number of transactions has a seasonal pattern.
+
+## Time series decomposition: graphical analysis
+
+Now that we believe our time series has a seasonal trend, we want to decompose the initial times series into several components (trend, seasonal and stochastic). Note that we decompose our time series as an additive time series, because when we analyse it graphically, we see that the difference between each year is mainly a difference in the average level of transactions each year, and not much a difference between the amplitude of the change in the number of transactions from one month to another inside a specific year.
+
+Graphically, the decomposition gives us: 
+
 
 ```{r}
 ts1_bis <- ts(ts1, frequency = 12, start = c(1995,1))
 ts1_bis_components <- decompose(ts1_bis)
-plot(ts1_bis_components)
+plot(ts1_bis_components, col = "blue", xlab = "Figure 3: decomposition of the time series of the number of transactions")
+
 ```
+Several interesting observations can be made using these graphs.
+
+Looking at the trend, we can decompose it in different periods. The first one would be from 1995 to 2007, with an overall steady rise in the number of transactions. This takes place until the 2008 economic crisis creeps in, with a sharp decline in the trend of the number of transactions. After reaching this lowest point, the trend is mostly constant between 2009 and 2013 and 2015 and 2020, with only a slight increase between 2013 and 2015. We must be careful about interpreting the trend of the time series in the period following the outburst of Covid-19. As the UK was in lockdown, this artificially created a drop in the number of transactions in the first part of 2020, followed by a catch-up until the beginning of 2021. Those events are represented in the trend graph, but cannot be considered as a real trend as it was artificially created. Eventually, the catch-up is followed by a fast decline in the trend until the end of our study period, probably due to the economic slowdown, the high inflation and the resulting interest rates hikes by the Bank of England.
+
+Regarding the stochastic part of the decomposition, we can mainly note the fact that the variance of the random element of the process is steady over the whole period, except between 2020 and 2022 where it rises dramatically. This invites us to be even more cautious when it comes to interpreting the trend of the process in this period, as the amount of unexplained variance in the number of transactions is much more important.
+
+### Focus on the seasonality component
+
+Eventually, the seasonal trend can be decomposed into several principal periods each year. Let us graph the seasonal component over only one year to realise such a decomposition.
 
 ```{r}
 
-price <- data_rd_final$price_paid
+library("xts")
+seasonal_df <- as.data.frame(ts1_bis_components$seasonal)
+seasonal_df <- data.frame(seasonal_df[1:12,1], time_df[1:12,6])
+colnames(seasonal_df) <- c("seasonal_component", "date")
 
-k.out <- kmeans(price, 10, nstart=50)
-k.out$cluster
-k.out
 
-data_rd_final <- data.frame(data_rd_final, k.out$cluster)
+ggplot(seasonal_df,aes(x = date, y = seasonal_component)) + geom_line(color = "blue") + labs(title = "Figure 4: seasonal component of the number of monthly transactions") + xlab("Time") + ylab("Number of transactions (seasonal component)")
 
-find_mode <- function(x) {
-  u <- unique(x)
-  tab <- tabulate(match(x, u))
-  u[tab == max(tab)]
-}
-
-test <- data_rd_final %>%
-  group_by(county) %>%
-  summarise(mode = find_mode(k.out.cluster))
 ```
 
-```{r}
-summary(lm(total_annual_income~PM10,data=data_rd_final))
 
-summary(lm(PM10~population,data=data_rd_final))
+The first period is from february until july with a fast rise from the lowest point up to the highest point of the year in terms of the number of transactions. Then there is a slight decrease in august and september, and then we stay on an high plateau until the end of the year. If the high seasonal trend from june to september can be explained by the fact that most family try to move in their new homes during the summer holidays such that their children do not have to change school in the middle of the year, the drop in the seasonal trend between december and january is harder to explain.
 
-summary(lm(real_price~nb_transac,data=time_df))
-```
+# Clustering
+
+This part of the analysis will use clustering to form several different groups (ie clusters) containing all the price of the transactions from 1995 to 2023. Then, we will do a geographical analysis of those clusters and see if the areas sharing a lot of transactions in the same clusters also share common characteristics.
+
+Mainly, clustering aims at partitioning the data into distinct groups so that the observations within each group are quite similar to each other, and data in different groups are quite different from each other. To do so, we will use K-Means clustering, ie we partition the data into a pre-specified number of clusters.
+
+K-means clustering consists into partitioning the data such that within cluster variation is a small as possible, ie we want to solve the problem: 
+
+$$ \quad \textrm{minimize}_{~~C_1,...,C_K}\quad\sum_{k=1}^{K} WCW(C_k) \quad(1) $$
+Where $WCW(C_k)$ denotes the within cluster variation for cluster $C_k$, and is defined using Squared Euclidean distance:
+
+$$WCW(C_k) = \frac{1}{|n_k|}\sum_{i,i'\in C_k}\sum_{j=1}^{p}(x_{ij}-x_{i'j})^2 $$
+Where $n_k$ denotes the number of observations in cluster the $k$th cluster.
+
+In practice, the K-means clustering algorithm randomly allocates a number from 1 to $K$ to each of the observations, forming randomly K initial clusters. Then it iterates a procedure that consists in calculating the centroid for each cluster, and then allocate each point to the cluster whose centroid is the closer in terms of Squared Euclidean distance, until we reach a stable assignment of observations in each clusters.
+
+Because the initial assignment is random, repeating the procedure can yield different results, and we need to specify the number of times the K-means must be done. Eventually, we keep the result of the K-means clustering with the lowest (1).
+
+
+
+
 
