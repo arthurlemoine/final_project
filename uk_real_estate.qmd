@@ -1,0 +1,918 @@
+---
+title: "UK real estate transactions"
+author: "Matteo Boyer-Wright & Arthur Lemoine"
+format: html
+toc : true
+number_sections : true
+execute: 
+  warning: false
+  error: false
+  echo: false
+---
+
+<style>
+body {
+text-align: justify}
+</style>
+
+# Technical warnings
+
+For simplicity, the final databases used in this document are available from: https://www.dropbox.com/scl/fo/9c04715s1hkowsf0vnk70/h?rlkey=7r3x8pm6y9nkcdiusfhmq2ulb&dl=0
+We recommend you download this folder and place all files in the "data" folder of your own repository. 
+
+/!\ WARNING: you need to run this chunk because the last released version (0.1.4) introduces a bug leading to the following "Error: arguments have different crs". You might need to launch a new R session if you used the last version of transformr. 
+```{r}
+#| eval: false
+# detach("package:vegan", unload=TRUE) #Might be needed if transformr 0.1.4 is loaded
+devtools::install_version("transformr", version = "0.1.3") 
+```
+
+Optionally run this chunk if some of the packages we use are not installed on your computer.  
+```{r}
+#| eval: false
+
+install.packages("gganimate")
+install.packages("geojson")
+install.packages("zoo")
+install.packages("lubridate")
+install.packages("stargazer")
+install.packages("gifski")
+```
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(here)
+library(vroom)
+library(lubridate)
+library(ggplot2)
+library(stringr)
+library(knitr)
+library(zoo)
+library(geojsonio)
+library(broom)
+library(sf)
+library(urca)
+library(gganimate)
+library(transformr)
+library(seastests)
+library(xts)
+library(stargazer)
+library("gifski")
+
+here::i_am('final_project.Rproj')
+```
+
+```{r}
+time_df <- readRDS(here("data", "full_time_df.rds"))
+final_df <- readRDS(here("data", "full_final_df.rds"))
+postcode_df <- readRDS(here("data", "postcode_df.rds"))
+population_df <- readRDS(here("data", "population_df.rds"))
+income_df <- readRDS(here("data", "income_df.rds"))
+```
+
+# Research question presentation
+
+Through this report, we want to explore the determinants of real estate transactions in England and Wales. We will do so by utilizing a diverse set of variables from a variety of government sources. 
+
+In this study, we aim at determining which factors contribute to the variation in the number and the price of real estate transactions in the United Kingdom, and to what extent do the location of the property, interest rate, inflation, average income in the area, population density, and seasonality patterns influences these transactions?
+
+First findings and proposal of further analysis: 
+
+There is a clear drop in the number of transactions around the financial crisis of 2008. This was preceded by a stagnation in the average yearly price. The Quantitative Easing starting in 2015 could also explain the price peaking in the same year. 
+
+Moreover, The number of transactions plummets in 2020 due to the Covid crisis and is followed by a substantial rebound in 2021. Finally, it seems the year 2023 cannot be taken into account because we are missing data from the last months. 
+
+Our future analysis will focus on: 
+
+1) Look for seasonality in the evolution of the number of transactions.
+2) Analyse the evolution of the price of transactions.
+3) Producing a geographical analysis of both prices and the number of transactions.
+4) Using machine learning techniques (clustering) to find correlations between socio-demographics factors and our variables of interest. 
+
+# Data sets description
+
+We use two main datasets in this study.
+
+## First dataset: micro-level transaction data
+
+Our first dataset consists of the description of `r nrow(final_df)` real estate transactions using `r ncol(final_df)` variables between 1995 and 2023.
+
+The main variables are:
+
+1) `r colnames(final_df[,1])` is the sale price stated on the transfer deed.
+
+2 and 3) The name of the following variables are self-explanatory:`r colnames(final_df[,9])`,`r colnames(final_df[,10])`.
+
+4) `r colnames(final_df[,11])` indicates the Middle Layer Super Output Areas (MSOA), which is a geographic hierarchy designed to improve the reporting of small area statistics in England and Wales. The minimum population is 5000 and the mean is 7200. This is the geographical granularity level that we will use through all our study.
+
+5) `r colnames(final_df[,14])` refers to the mean household disposable (net) income on an equivalised basis for middle layer super output areas (MSOAs) in England and Wales. Equivalisation is the process of accounting for the fact that households with many members are likely to need a higher income to achieve the same standard of living as households with fewer members.
+
+## Second dataset: macro-level transaction data
+
+Our second dataset consists of the description of `r nrow(time_df)` real estate transactions using `r ncol(time_df)` variables on a monthly basis between 1995 and 2003.
+
+The variables are:
+
+1) `r colnames(time_df[,1])` is the Consumer Price Index in the UK provided by the Office for National Statistics. 
+
+2) `r colnames(time_df[,2])` is the benchmark interest rate decided by the Bank of England.
+
+3) `r colnames(time_df[,3])` is the number of transactions in the UK.
+
+4) `r colnames(time_df[,4])` is the mean nominal price of all the transactions in the UK.
+
+5) `r colnames(time_df[,5])` is the mean real price of all the transactions in the UK, obtained by deflating the mean nominal price using the CPI.
+
+6) `r colnames(time_df[,6])` indicates the month and the year for which the data is relevant.
+
+# Data analysis
+## Time series analysis: number of transactions
+
+Using our main dataset, we have created a time series containing the number of monthly transactions from 1995 to 2023. 
+
+```{r}
+ggplot(time_df, aes(x = date, y = nb_transac)) + 
+  geom_line(color = "steelblue") + 
+  labs(title = "Figure 1: time series of the number of monthly transactions") + 
+  xlab("Time") + 
+  ylab("Number of transactions")
+```
+
+This first graph allows us to observe 5 important facts:\
+1) There is a clear seasonality in the evolution of the number of monthly transactions.\
+2) The number of sales plunged during the 2008 sub-prime crisis.\
+3) The first lock down (march 2020) was also synonymous of a large slow-down in the number of transaction.\
+4) The effect depicted in (4) was quickly followed by a catch-up effect in 2021.\
+5) The number of sales seems to be quickly falling in 2023.
+
+We will dedicate the next section to the analysis of the seasonality of this time series. Regarding the impact of crisis (sub-prime and COVID-19) on the real estate market, a large literature is already available and we decided not to spend to much time on those topics.
+
+### Seasonality study
+#### Graphical analysis (1)
+
+Just by studying graphically the time series, we are inclined to conclude that it is highly likely that the number of transactions per month is affected by a seasonality phenomena.
+
+The general pattern is especially clear between 2000 and 2005 for instance. The number of transactions is at its lowest every beginning of a new year, and rises sharply until it reaches its highest point around what is likely the end of spring and the summer (a more rigorous study of the patterns will be done later on). Then it drops dramatically until December, to start the new year at a low point.
+
+However, this graphical analysis in itself is not sufficient to conclude with certainty that the time series has a seasonal trend. We will then proceed with more rigorous tests in order to detect seasonality.
+
+#### Testing for seasonality (1)
+##### ADF test (1)
+
+We begin with an Augmented Dickey Fuller test. Even though we are aware that the ADF test is not a seasonality test per se, our idea behind this is that if we are unable to detect stationarity in our initial time series, and then, if after de-trending the seasonality in our time series by using a twelfth difference filter (because we use monthly data), we are able to detect stationarity, we can conclude that we have corrected the time series of its seasonal trend component, and that our initial time series is affected by seasonality.
+
+Formally, the ADF test is a unit root test. Imagine we have a time series model of the following form :
+
+$$ Y_t = \mu + \alpha Y_{t-1} + \epsilon_t \quad \textrm{AR(1)} $$
+
+The hypothesis for the simple Dickey-Fuller test would be:
+
+$$ H_0: \alpha = 1 \quad \textrm{versus} \quad H_A: \alpha \neq 1 $$
+
+And more generally, for any ARIMA model, we can apply the same principle but including high order regressive process in our model equation using the ADF test, with a model of the form: 
+
+$$ Y_t = \mu + \beta t +  \alpha Y_{t-1} + \phi_{1}\Delta Y_{t-1} + \phi_{2}\Delta Y_{t-2} + \quad \textrm{...} \quad + \phi_{p}\Delta Y_{t-p} + \epsilon_t \quad $$
+Where $\mu$ denotes the drift of the process, and $t$ the trend.
+
+The hypothesis remains the same, and can be understood as:
+
+$$ H_0: \quad \textrm{The time series is non-stationary} \quad \textrm{versus} \quad  H_A: \textrm{The time series is stationary} $$
+Now to the test. We use the function 'ur.df' of the 'urca' package to realize the test. Note that we select the relevant time series model (ie which order of lags should we select) by discriminating among different high order regressive process models using the Akaike Information Criterion. We only allow for models up to the twelth order, because we have monthly data. We include a drift but no trend because there does not seem to be a general trend over the whole period when we look at the time series graphically.
+
+The regression and test's results are:
+
+```{r}
+ts1 <- na.omit(time_df$nb_transac)
+summary(ur.df(ts1, type = "drift", lags = 12, selectlags = c("AIC")))
+
+results <- summary(ur.df(ts1, type = "drift", lags = 12, selectlags = c("AIC")))
+```
+
+We see that the selected best model according to the AIC is the model going up to the twelfth order. Because our t-stat (round(`r results@teststat[2]`),2) for the $\alpha$ component of the estimated model is lower in absolute value compared to the 5% critical value of the associated distribution (`r results@cval[2,3]`), we fail to reject $H_0$ at the 5% level of significance, ie we cannot conclude that our time series is stationnary.
+
+#### Graphical analysis (2)
+
+Now let us de-trend the possible seasonal part of the process by applying a twelfth order difference filter.
+
+First, we plot this corrected time series:
+
+```{r}
+ts2 <- diff(ts1,lag = 12)
+df_ts2 <- data.frame(ts2, time_df$date[13:length(ts1)])
+colnames(df_ts2) <- c("ts2", "date")
+  
+ggplot(df_ts2,aes(x = date , y = ts2)) + 
+  geom_line(color = "steelblue") + 
+  labs(title = "Figure 2: time series of the number of monthly transactions (using a twelth order difference filter)") + 
+  xlab("Time") + 
+  ylab("Number of transactions (twelth order difference)") + 
+  theme(text = element_text(size = 9))
+```
+Graphically, it seems like we have no seasonal trend anymore. We are unable to visually detect a seasonal pattern.
+
+#### Testing seasonality (2)
+##### ADF test (2)
+
+Then, we proceed with the ADF test, using again the same method for picking up the appropriate model in terms of regressive process order.
+
+```{r}
+summary(ur.df(ts2, type = "drift", lags = 12, selectlags = c("AIC")))
+
+results2 <- summary(ur.df(ts2, type = "drift", lags = 12, selectlags = c("AIC")))
+```
+
+Again, we see that the selected best model according to the AIC is the model going up to the twelth order. Because our t-stat (`r results@teststat[2]`) for the $\alpha$ component of the estimated model is now higer in absolute value compared to the 5% critical value of the associated distribution (`r results@cval[2,3]`), we reject $H_0$ at the 5% level of significance, ie we conclude that our time series is now stationnary.
+
+This first test seems to indicate that the number of transactions has a seasonal pattern. However, we are aware that the ADF test is not a proper time series seasonality test. We want to reinforce this first result by using a real seasonality test.
+
+#### WO combined seasonality test
+
+We use the 'seastests' package, developped by Daniel Ollech from the Bundesbank. The package documentation is available at https://cran.r-project.org/web/packages/seastests/seastests.pdf. We realize the Ollech-Webel overall seasonality test that combines result from two seasonality tests, the QS test and the KW-test. The test hypothesis are: 
+
+$$ H_0: \quad \textrm{The time series does not have a seasonal trend} \quad \textrm{versus} \quad  H_A: \textrm{The time series has a seasonal trend} $$
+
+The results are: 
+
+```{r}
+summary(combined_test(ts1, freq = 12))
+
+summary(combined_test(ts2, freq = 12))
+```
+We see that the OW combined seasonality test identifies seasonality in the first time series, but does not identify seasonality in the second time series with a twelth order difference filter. This furthers reinforce our belief that the number of transactions has a seasonal pattern.
+
+### Time series decomposition: graphical analysis
+
+Now that we believe our time series has a seasonal trend, we want to decompose the initial times series into several components (trend, seasonal and stochastic). Note that we decompose our time series as an additive time series, because when we analyse it graphically, we see that the difference between each year is mainly a difference in the average level of transactions each year, and not much a difference between the amplitude of the change in the number of transactions from one month to another inside a specific year.
+
+Graphically, the decomposition gives us: 
+
+```{r}
+ts1_bis <- ts(ts1, frequency = 12, start = c(1995,1))
+ts1_bis_components <- decompose(ts1_bis)
+
+plot(ts1_bis_components, col = "steelblue", xlab = "Figure 3: decomposition of the time series of the number of transactions")
+```
+Several interesting observations can be made using these graphs.
+
+Looking at the trend, we can decompose it in different periods. The first one would be from 1995 to 2007, with an overall steady rise in the number of transactions. This takes place until the 2008 economic crisis creeps in, with a sharp decline in the trend of the number of transactions. After reaching this lowest point, the trend is mostly constant between 2009 and 2013 and 2015 and 2020, with only a slight increase between 2013 and 2015. We must be careful about interpreting the trend of the time series in the period following the outburst of Covid-19. As the UK was in lockdown, this artificially created a drop in the number of transactions in the first part of 2020, followed by a catch-up until the beginning of 2021. Those events are represented in the trend graph, but cannot be considered as a real trend as it was artificially created. Eventually, the catch-up is followed by a fast decline in the trend until the end of our study period, probably due to the economic slowdown, the high inflation and the resulting interest rates hikes by the Bank of England.
+
+Regarding the stochastic part of the decomposition, we can mainly note the fact that the variance of the random element of the process is steady over the whole period, except between 2020 and 2022 where it rises dramatically. This invites us to be even more cautious when it comes to interpreting the trend of the process in this period, as the amount of unexplained variance in the number of transactions is much more important.
+
+#### Focus on the seasonality component
+
+Eventually, the seasonal trend can be decomposed into several principal periods each year. Let us graph the seasonal component over only one year to realise such a decomposition.
+
+```{r}
+seasonal_df <- as.data.frame(ts1_bis_components$seasonal)
+seasonal_df <- data.frame(seasonal_df[1:12,1], time_df[1:12,6])
+colnames(seasonal_df) <- c("seasonal_component", "date")
+
+ggplot(seasonal_df, aes(x = date, y = seasonal_component)) + 
+  geom_line(color = "steelblue") + 
+  labs(title = "Figure 4: seasonal component of the number of monthly transactions") + 
+  xlab("Time") + 
+  ylab("Number of transactions (seasonal component)")
+```
+
+The first period is from February until July with a fast rise from the lowest point up to the highest point of the year in terms of the number of transactions. Then there is a slight decrease in August and September, and then we stay on an high plateau until the end of the year. If the high seasonal trend from June to September can be explained by the fact that most families try to move in their new homes during the summer holidays such that their children do not have to change school in the middle of the year, the drop in the seasonal trend between December and January is harder to explain.
+
+## Additionnal analysis: bank rate vs. number of transactions
+
+One of the main explanations for the recent slow-down on the market has been the rise in housing loan rates. We decided to compare side-by-side the evolution of the Bank of England rate (which is a good proxy for the loan rates) and the number of transactions on the 1995-2023 period. The following graph let us see that there is a clear inverse relationship between the Bank of England recent increase in its rate and the plunging number of transactions. However, we fill like this explanation is not totally satisfying as the real estate market seemed to behave normally between 1995 and 2009 whereas rates were at even higher levels than nowadays.
+
+Thus, one could conclude that what really matters is less the level of the bank rate than its direction. In other words, it is not the high levels of bank rates that had a negative impact on the number of transactions, but their fast increase. In fact, people might expect (or at least wait) for a decrease in bank rates before considering buying a new house. 
+
+```{r}
+long_vs_bank_rate_df <- time_df %>%
+  pivot_longer(cols = c("rate", "nb_transac"), 
+               names_to = "variable",
+               values_to = "value") %>%
+  select(date, variable, value)
+
+ggplot(long_vs_bank_rate_df, aes(date, value)) + 
+  geom_line() + 
+  facet_wrap(~ variable, scales = "free_y", ncol = 1, 
+             labeller = as_labeller(c("nb_transac"= "Number of transactions", 
+                                      "rate"="Bank of England rate (%)"))) + 
+  ylim(0, NA) + 
+  xlab(NULL) + 
+  ylab(NULL) +
+  ggtitle("Evolution of the Bank of England rate and the number of transactions")
+```
+
+## Time series analysis: prices
+
+### Transaction prices distribution
+
+The second key variable we are interested in is the price of transactions. First, we observe that the distribution of prices is heavily right-skewed. In fact, 99% of transactions are below `r quantile(final_df$price_paid, probs = 0.99)` pounds and, more importantly, 95% of transactions do not exceed `r quantile(final_df$price_paid, probs = 0.95)` pounds.
+
+```{r}
+ggplot(final_df, aes(price_paid)) + 
+  geom_density(fill = "steelblue") +
+  xlim(10000,2000000) + 
+  xlab("Transaction price (in £)") + 
+  ylab(NULL) +
+  ggtitle("Distribution of transaction prices")
+```
+
+### Price evolution: nominal vs. real
+
+#### Visual analysis
+
+If we now look at the evolution of prices since 1995, we can see a very steep increase in the average price of transactions. It is also interesting to note that prices have been a lot more volatile since the COVID-19 crisis.
+
+However, when looking at the real prices, we realise that most of the increase took place between 1995 and 2009. While prices have increased again between 2014 and 2021, it seems they are back to their 2009 level in 2023 (or even a little below).
+
+One additional observation is that the 2008 sub-prime crisis had a greater impact on the number of transactions than on the average price.
+
+Finally, the price decrease which started at the end of 2022 is not only due to the recent high levels of inflation. In fact, both real and nominal prices are affected.
+
+```{r}
+ggplot(time_df, aes(x=date)) +
+  geom_line(aes(y = mean_price, color="Nominal price")) + 
+  geom_line(aes(y = real_price, color="Real price")) + 
+  xlab(NULL) + 
+  ylab("Average transaction price (1995 £)") + 
+  scale_color_manual(name = NULL, values = c("Nominal price" = "steelblue", "Real price" = "darkred")) + 
+  ggtitle("Evolution of transaction prices (real vs. nominal)") + 
+  theme(legend.position = "bottom")
+```
+
+#### Linear regression
+
+```{r}
+regress_df <- time_df %>%
+  mutate(year = as.numeric(year(date))) %>%
+  group_by(year) %>%
+  summarise(nb_transac = sum(nb_transac),
+            mean_price = mean(mean_price))
+
+price_time_reg <- lm(mean_price ~ nb_transac + year, data = regress_df)
+```
+
+
+```{r results = 'asis'}
+stargazer(price_time_reg, title="Linear regression of the average transaction price over time and number of transactions", type = "html")
+```
+
+What we can conclude from this regression is: 
+1) On average, prices have increases by £12,671 per year
+2) While being statistically significant at the 5% level (**), the effect of the number of transactions over price is not economically relevant. In fact, the coefficient is equal to 0.026, meaning that if we were to double the number of transactions (ie, a 100% increase from roughly 100 000 per year to 200 000 per year), the average price of a transaction would increase by £2,600. 
+
+## Geographical analysis: number of transactions
+
+### Aggregated number of transaction on the 1995-2023 period
+
+The following map depicts the spatial distribution of the aggregated number of transactions over the 1995-2023 period. Each geographical area corresponds to a local authority. 
+
+```{r}
+ukmap <- geojson_read(here("data", "uk_la.geojson"), what = "sp")
+ukmap <- sf::st_as_sf(ukmap, coords = c("long", "lat"))
+
+transac_by_local_authority_1995_2023_df <- final_df %>%
+  group_by(local_authority_code) %>%
+  summarise(mean_price = mean(price_paid),
+            nb_transac = n())
+
+map_data_1995_2023 <- ukmap %>%
+  left_join(transac_by_local_authority_1995_2023_df,  by=c("geo_code"="local_authority_code"))
+
+ggplot() +
+  geom_sf(data = map_data_1995_2023, aes(fill = nb_transac), linewidth = 0) +
+  scale_fill_viridis_b(breaks = c(25000, 50000, 75000, 100000, 200000, 300000)) + 
+  ggtitle("Aggregated number of real estate transactions (1995-2023)") +
+  theme(legend.position = "right", legend.title = element_blank())
+```
+
+### Number of transactions vs. population
+
+Looking at the number of transactions from a geographical point of view allows us to observe a large discrepancy between regions. However, at this stage of the analysis, we can not draw any further conclusion since the regions in which there were a lot of transactions are also the most populated ones. In fact, 9 of the most populated cities in the UK are among the top 10 local areas in terms of number of transactions (see table below).
+
+#### Country level
+
+```{r}
+pop_by_la <- population_df %>%
+  group_by(ladcode21) %>%
+  summarise(population = sum(population_2021))
+
+top_10_nb_transac_1995_2023 <- map_data_1995_2023 %>%
+  st_drop_geometry() %>%
+  select(geo_label, geo_code, nb_transac)
+
+top_10_nb_transac_1995_2023 <- top_10_nb_transac_1995_2023 %>%
+  left_join(pop_by_la, by = c("geo_code"="ladcode21")) %>%
+  select(-geo_code) %>%
+  arrange(desc(population)) %>%
+  mutate(rank = 1:nrow(top_10_nb_transac_1995_2023)) %>%
+  arrange(desc(nb_transac))
+  
+
+knitr::kable(top_10_nb_transac_1995_2023[1:10,], 
+             col.names = c("Local authority", "Number of transactions", "Population", "Rank (population)"), 
+             caption = "Top 10 cities with the highest number of transactions between 1995 and 2023", 
+             format.args = list(big.mark = " "))
+```
+
+#### Zoom on London
+```{r}
+greater_london <- c('E09000003', 'E09000006', 'E09000024', 'E09000027', 'E09000032', 'E09000001', 'E09000015',  'E09000023', 'E09000016', 'E09000007', 'E09000010', 'E09000011', 'E09000009', 'E09000017', 'E09000022', 'E09000031', 'E09000033', 'E09000019', 'E09000008', 'E09000002', 'E09000018', 'E09000025', 'E09000030', 'E09000021', 'E09000028', 'E09000020', 'E09000026', 'E09000004', 'E09000005', 'E09000012', 'E09000013', 'E09000014', 'E09000029')
+
+map_data_1995_2023_london <- map_data_1995_2023 %>%
+  mutate(nb_transac = case_when(geo_code %in% greater_london ~ nb_transac, 
+                                TRUE ~ NA))
+```
+
+It is important to note that since London is divided in not less than 31 local authorities, it does not appear in the preceding table. However, in this period the 'Greater London' area accounted for `r as.integer(100*(sum(map_data_1995_2023_london$nb_transac, na.rm=TRUE)/sum(map_data_1995_2023$nb_transac, na.rm=TRUE)))` % of the total transactions (exactly `r sum(map_data_1995_2023_london$nb_transac, na.rm=TRUE)` transactions).
+
+```{r}
+ggplot() +
+  geom_sf(data = map_data_1995_2023_london, aes(fill = nb_transac), linewidth = 0) + 
+  coord_sf(c(-1, 1), c(51,52)) + 
+  ggtitle("Aggregated number of transactions - Greater London area (1995-2023)") +
+  scale_fill_viridis_b(n.breaks = 5) +
+  theme(legend.position = "right", legend.title = element_blank())
+```
+
+Zooming on the Greater London area, we can see that the number of transactions is quite high (considering the size of each local area) and relatively evenly distributed. In fact, in this region, the average number of transactions is `r as.integer(mean(map_data_1995_2023_london$nb_transac, na.rm =TRUE))`, compared with the national average of `r as.integer(mean(map_data_1995_2023$nb_transac, na.rm =TRUE))`. Moreover, as we can see on the map, in most local areas, the number of transactions lied between 100 000 and 150 000 transactions.
+
+```{r}
+map_nb_transac_per_k_hab_1995_2023 <- map_data_1995_2023 %>%
+  left_join(pop_by_la, by = c("geo_code"="ladcode21")) %>%
+  mutate(transac_hab = (nb_transac/population)*1000)
+
+ggplot() +
+  geom_sf(data = map_nb_transac_per_k_hab_1995_2023, aes(fill = transac_hab), linewidth = 0) + 
+  ggtitle("Number of transactions per 1000 hab (1995-2023)") +
+  scale_fill_viridis_b(n.breaks = 6) +
+  theme(legend.position = "right", legend.title = element_blank())
+```
+
+When correcting for the population levels, we observe that the number of transactions is more evenly distributed. We can also note that the most attractive regions seem to be the ones one the coasts. On the contrary, the regions around Wales and the Northern territories have, on average, a lower number of transactions.
+
+## Geographical analysis: prices
+
+### Average price on the 1995-2023 period
+
+#### Country level visual analysis
+
+Just as in the first part, we will now have a look at the distribution of the average price of transactions. For this first map, the figures are "raw". In fact, we did not take into account inflation, nor any other socio-demographic variable. Therefore, this map only depicts the average price of transactions over the whole period.
+
+```{r}
+map_data_1995_2023_price <- map_data_1995_2023 %>%
+  mutate(mean_price = mean_price/1000)
+
+ggplot() +
+  geom_sf(data = map_data_1995_2023_price, aes(fill = mean_price), linewidth = 0) +
+  scale_fill_viridis_b(n.breaks = 6, name = "Price (in thousand £)") + 
+  ggtitle("Average transaction price (1995-2023)") +
+  theme(legend.position = "right")
+```
+
+The figure above demonstrates the depth of the division between London and the rest of the UK when it comes to the average price of transactions. Going a little further, we can regroup the UK in 4 main regions according to the average transaction price:\  
+- The greater London area, with the highest average transaction price.\
+- Midlands and Wales, with the lowest average transaction price.\
+- South and East England, with a lower-medium average transaction price.\
+- Industrial cities of the North (Manchester, Liverpool, Leeds), with a lower-medium average transaction price as well.
+
+#### Zoom on London
+
+Once more, it is interesting to zoom on the Greater London area. We don't have data on the very central local authorities (too small) of Westminster (City of) and London (City of), but we see that the districts with the highest average price are the central ones, namely Kensington & Chelsea (in yellow) and Camden (in green). It is also worth noting that as soon as you move apart from the center, the average price quickly becomes similar to the rest of England.
+
+```{r}
+map_data_1995_2023_price_london <- map_data_1995_2023_price %>%
+  mutate(mean_price = case_when(geo_code %in% greater_london ~ mean_price, 
+                                TRUE ~ NA))
+
+ggplot() +
+  geom_sf(data = map_data_1995_2023_price_london, aes(fill = mean_price), linewidth = 0) + 
+  coord_sf(c(-1, 1), c(51,52)) + 
+  ggtitle("Average transaction price - Greater London area (1995-2023)") +
+  scale_fill_viridis_b(n.breaks = 6, name = "Price (in thousand £)") +
+  theme(legend.position = "right")
+```
+
+Up to this point, our analysis was mainly based on visual observation of our data. We decided to go a little further and try to see if we could use more advanced data science and statistical methods to corroborate our findings. 
+
+### A little machine learning science: clustering in theory
+
+This part of the analysis will use clustering to form several different groups (ie clusters) containing all the price of the transactions from 1995 to 2023. Then, we will do a geographical analysis of those clusters and see if the areas sharing a lot of transactions in the same clusters also share common characteristics.
+
+Mainly, clustering aims at partitioning the data into distinct groups so that the observations within each group are quite similar to each other, and data in different groups are quite different from each other. To do so, we will use K-means clustering, ie we partition the data into a pre-specified number of clusters.
+
+K-means clustering consists into partitioning the data such that within cluster variation is a small as possible, ie we want to solve the problem: 
+
+$$ \quad \textrm{minimize}_{~~C_1,...,C_K}\quad\sum_{k=1}^{K} WCW(C_k) \quad(1) $$
+Where $WCW(C_k)$ denotes the within cluster variation for cluster $C_k$, and is defined using Squared Euclidean distance:
+
+$$WCW(C_k) = \frac{1}{|n_k|}\sum_{i,i'\in C_k}\sum_{j=1}^{p}(x_{ij}-x_{i'j})^2 $$
+Where $n_k$ denotes the number of observations in cluster the $k$th cluster.
+
+In practice, the K-means clustering algorithm randomly allocates a number from 1 to $K$ to each of the observations, forming randomly K initial clusters. Then it iterates a procedure that consists in calculating the centroid for each cluster, and then allocate each point to the cluster whose centroid is the closer in terms of Squared Euclidean distance, until we reach a stable assignment of observations in each clusters.
+
+Because the initial assignment is random, repeating the procedure can yield different results, and we need to specify the number of times the K-means must be done. Eventually, we keep the result of the K-means clustering with the lowest (1).
+
+### Clustering in practice
+
+```{r}
+cluster_df <- final_df %>%
+  filter(property_type != "O") %>%
+  filter(quantile(final_df$price_paid, probs = 0.005) < price_paid 
+         & price_paid < quantile(final_df$price_paid, probs = 0.995)) %>%
+  select(postcode, local_authority_code, year, property_type, price_paid) %>%
+  left_join(pop_by_la, by=c("local_authority_code"="ladcode21"))
+```
+
+```{r}
+k.out <- kmeans(cluster_df$price_paid, 10, nstart=50)
+
+cluster_df <- data.frame(cluster_df, k.out$cluster)
+
+find_mode <- function(x) {
+  u <- unique(x)
+  tab <- tabulate(match(x, u))
+  u[tab == max(tab)]
+}
+
+mode_cluster <- cluster_df %>%
+  group_by(local_authority_code) %>%
+  summarise(mode = find_mode(k.out.cluster)) %>%
+  mutate(mode_mean = as.integer(k.out$centers[mode]))
+```
+
+To recap, first, each transaction has been assigned to a cluster based on its price. Then we associated each local authority level with the corresponding cluster mode (ie, the most frequent cluster in all transactions that took places in this specific local authority). Finally, we draw a map associating each local authority to the average transaction price in the cluster (ie, the centroid). 
+
+#### Country level 
+
+```{r}
+map_data_clustering <- ukmap %>%
+  left_join(mode_cluster, by=c("geo_code"="local_authority_code")) 
+
+ggplot() +
+  geom_sf(data = map_data_clustering, aes(fill = factor(mode_mean)), linewidth = 0) + 
+  ggtitle("Average transaction price - clustering (1995-2023)") + 
+  scale_fill_viridis_d(na.value = "grey50", name ="Average price in cluster")
+```
+
+We obtain very similar results with the clustering method, leading us to confirm our previous analysis in terms of spatial distribution of prices. More precisely, we observe: 
+- High prices around London.\  
+- Moderate prices in the East, the South and the industrial North.\  
+- Low prices in the Midlands and at the border with Scotland.\  
+
+#### Zoom on London
+
+```{r}
+map_data_clustering_london <- map_data_clustering %>%
+  mutate(mode_mean = case_when(geo_code %in% greater_london ~ mode_mean, 
+                                TRUE ~ NA))
+
+ggplot() +
+  geom_sf(data = map_data_clustering_london, aes(fill = factor(mode_mean)), linewidth = 0) + 
+  coord_sf(c(-1, 1), c(51,52)) + 
+  ggtitle("Average price (clustering) - Greater London area (1995-2023)") + 
+  scale_fill_viridis_d(na.value = "grey50", name ="Average price in cluster")
+```
+
+Once more, results are quite similar with the ones from the previous section with very high prices in the centre of London, high prices in the first circle and prices close to the national average when going a little further. 
+
+### Socio-demographics of clusters
+
+In the previous part, we showed that clusters matched with the geographical distribution of average transaction prices. We are now interested in the socio-demographic determinants of real estate transactions. 
+
+We stayed at the local authority level and looked at both the average population and average income in each cluster. Since our data on income levels started in 2011, we took the mean income over the 2011-2021 period. The results can be seen in the table below. 
+
+```{r}
+income_by_la <- income_df %>%
+  group_by(local_authority_code) %>%
+  summarise(mean_income = mean(total_annual_income))
+
+match_la_cd_to_la_name <- population_df %>%
+  select(ladcode21, ladname21) %>%
+  distinct()
+
+mode_cluster_table <- mode_cluster %>%
+  left_join(income_by_la, by="local_authority_code") %>%
+  left_join(pop_by_la, by = c("local_authority_code"="ladcode21")) %>%
+  group_by(mode) %>%
+  summarise("Cluster" = mean(mode),
+            "Average transaction price" = mean(mode_mean), 
+            "Average population" = mean(population, na.rm=TRUE),
+            "Average income" = mean(mean_income, na.rm = TRUE)) %>%
+  select(-mode) %>%
+  arrange((`Average transaction price`))
+
+kable(mode_cluster_table)
+```
+
+The main conclusion we can draw from this new perspective, and it should not come as a surprise, the higher the transaction price, the higher the average income in the cluster. The size (in terms if population) of the local authorities does not seem to have a great impact on the clustering, and therefore on the prices. 
+
+## Wrapping-up: spatiotemporal patterns
+
+While the first section was devoted to the temporal analysis of prices and number of transactions, the second focused solely on the geographical distribution of our key variables. This third and last section will explore the combination of those two aspects. 
+
+```{r}
+transac_by_local_authority_df <- final_df %>%
+  group_by(year, local_authority_code) %>%
+  summarise(mean_price = mean(price_paid),
+            nb_transac = n())
+
+map_data_by_year <- ukmap %>%
+  left_join(transac_by_local_authority_df, by=c("geo_code"="local_authority_code"))
+
+#Done to get NAs instead of missing data
+map_data_nb_transac <- map_data_by_year %>%
+  pivot_wider(id_cols = c("geo_code", "geo_label", "geometry"), 
+              names_from = year, 
+              values_from = nb_transac) %>%
+  pivot_longer(cols = c("1995", "1996", "1997", "1998", "1999", "2000", "2001", "2002", "2003", "2004", "2005", "2006", "2007", "2008", "2009", "2010", "2011", "2012", "2013", "2014", "2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022", "2023"),
+               names_to = "year", 
+               values_to = "nb_transac") %>%
+  select(-"NA") %>%
+  mutate(year = as.numeric(year))
+```
+
+```{r}
+animated_nb_transac_map <- ggplot() +
+  geom_sf(data = map_data_nb_transac, aes(fill = nb_transac), linewidth = 0) +
+  scale_fill_viridis_b(breaks = c(1000, 2000, 3000, 4000, 5000, 7500, 10000), name="Number of transactions") + 
+  transition_time(year) +
+  ggtitle("Number of yearly real estate transactions",
+          subtitle = "Year: {as.integer(frame_time)}") +
+  theme(legend.position = "right")
+
+animated_nb_transac_map <- animate(animated_nb_transac_map, fps = 1, nframes = 28)
+# add width=1080, height=1080 for high resolution
+
+anim_save(here("image", "nb_transac_map.gif"), animated_nb_transac_map)
+
+animated_nb_transac_map
+```
+
+This first animated map summaries perfectly what we have seen so far. First, there is a large discrepancy in the distribution of the number of real estate transactions at the country level. Second, the sub-prime crisis of 2008 and the COVID-19 crisis had a huge impact on the number of transactions. 
+
+```{r}
+map_data_price <- map_data_by_year %>%
+  pivot_wider(id_cols = c("geo_code", "geo_label", "geometry"), 
+              names_from = year, 
+              values_from = mean_price) %>%
+  pivot_longer(cols = c("1995", "1996", "1997", "1998", "1999", "2000", "2001", "2002", "2003", "2004", "2005", "2006", "2007", "2008", "2009", "2010", "2011", "2012", "2013", "2014", "2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022", "2023"),
+               names_to = "year", 
+               values_to = "mean_price") %>%
+  select(-"NA") %>%
+  mutate(year = as.numeric(year))
+```
+
+```{r}
+animated_price_map <- ggplot() +
+  geom_sf(data = map_data_price, aes(fill = mean_price), linewidth = 0) +
+  scale_fill_viridis_b(trans = "log", name="Price (in £)") + 
+  transition_time(year) +
+  ggtitle("Average yearly price of real estate transactions",
+          subtitle = "Year: {as.integer(frame_time)}") +
+  theme(legend.position = "right")
+
+animated_price_map <- animate(animated_price_map, fps = 1, nframes = 28)
+# add width=1080, height=1080 for high resolution
+
+anim_save(here("image", "price_map.gif"), animated_price_map)
+
+animated_price_map
+```
+
+While this last figure is interesting as it shows that the main driver to the evolution of nominal prices is indeed time, it is important to remember that both geographical and temporal effects are playing at the same time. In fact, we see that the map shifts from dark blues to light greens and yellow (temporal effect), but, this shift starts from London, then spreads to the regions around London, then to the industrial North and finally to the rest of the UK (geographical effect).
+
+# Conclusion
+
+What are the main findings of our analysis?
+
+- We find strong evidence of a seasonality pattern in the registered number of real estate transactions each year. There is two distinct periods: an high seasonal trend from June to September that could be explained by the fact that most families try to move in their new homes during the summer holidays such that their children do not have to change school in the middle of the year, and a low seasonal trend between December and January.
+
+- The evolution of the number of transactions over longer periods of time can also be analysed through the movement of the bank rate. We find that what really matters is less the level of the bank rate than its direction, as people may still contract an loan to buy real estate in an high bank rate environment if they expect this rate to remain constant in the next years, and conversely if they expect a decrease.
+
+- The Covid-19 and the post pandemic periods are associated with an overall increase in the volatility of the prices and the number of transactions.
+
+- The most attractive regions in terms of the number of transactions per inhabitant are the ones on the coasts and the less attractive ones are the regions around Wales and the Northern territories.
+
+- When looking at the prices, we can regroup the UK in 4 main regions according to the average transaction:\ 
+
+* The greater London area, with the highest average transaction price.\
+* Midlands and Wales, with the lowest average transaction price.\
+* South and East England, with a lower-medium average transaction price.\
+* Industrial cities of the North (Manchester, Liverpool, Leeds), with a lower-medium average transaction price as well.
+
+When we apply clustering techniques to the transaction data, we find corroborating evidence as we observe:
+
+* High prices around London.\  
+* Moderate prices in the East, the South and the industrial North.\  
+* Low prices in the Midlands and at the border with Scotland.\  
+
+- Over a long period, the main driver to the evolution of nominal prices is time, through inflation and a correlated increase of the nominal prices.
+
+# Appendix
+
+## Data loading
+
+```{r}
+#| eval: false
+
+# Load main dataset
+df <- vroom(here("data", "pp-complete.csv"), col_names = FALSE)
+
+# Load income data
+income1112 <- vroom(here("data", "income1112.csv"), skip = 5, col_names = FALSE)
+income1314 <- vroom(here("data", "income1314.csv"), skip = 5, col_names = FALSE)
+income1516 <- vroom(here("data", "income1516.csv"), skip = 5, col_names = FALSE, col_select = -c(11:14))
+income1718 <- vroom(here("data", "income1718.csv"), skip = 5, col_names = FALSE)
+income1920 <- vroom(here("data", "income1920.csv"), skip = 5, col_names = FALSE, delim = ";")
+
+# Load population data by postcode (2011)
+population_df <- vroom(here("data", "population2011.csv"), skip = 1, col_names = FALSE)
+
+# Load population data by local area (2021)
+population_2021_df <- vroom(here("data", "population_2021.csv"))
+
+# Load data to convert postcode to local areas
+postcode_df <- vroom(here("data", "postcode_to_area.csv"))
+
+# Load data for time series
+bank_rate_df <- vroom(here('data', 'bank_rate.csv'), delim = ',')
+inflation_df <- vroom(here('data', 'inflation.csv'), col_names = FALSE, skip = 287, delim =',')
+```
+
+## Data cleaning
+
+```{r}
+#| eval: false
+
+# Clean main
+df <- df %>%
+  rename("unique_id" = 1,
+         "price_paid" = 2,
+         "deed_date" = 3,
+         "postcode" = 4,
+         "property_type" = 5,
+         "new_build" = 6,
+         "estate_type" = 7,
+         "saon" = 8,
+         "paon" = 9,
+         "street" = 10,
+         "locality" = 11,
+         "town" = 12,
+         "district" = 13,
+         "county" = 14,
+         "transaction_category" = 15,
+         "linked_data_uri" = 16)
+
+df <- df %>% 
+  mutate(deed_date = lubridate::ymd(deed_date))
+
+df <- df %>% 
+  mutate(year = as.numeric(format(deed_date, format="%Y")), 
+         month = as.numeric(format(deed_date, format="%m")))
+
+df <- df %>%
+  select(-1,-unique_id, -linked_data_uri)
+
+# Clean income
+
+## Data from years 2011/2012 and 2013/2014 are recorded as weekly and need to be transformed to annual 
+income1112[,c(7:10)] <- income1112[,c(7:10)]*52
+income1314[,c(7:10)] <- income1314[,c(7:10)]*52
+
+##  Fixing issue with Excel export introducing a blank space after the thousands
+income1920 <- income1920 %>%
+  mutate(X7 = str_replace_all(X7," ","")) %>%
+  mutate(X8 = str_replace_all(X8," ","")) %>%
+  mutate(X9 = str_replace_all(X9," ","")) %>%
+  mutate(X10 = str_replace_all(X10," ",""))
+
+income1920$X7 <- as.numeric(income1920$X7)
+income1920$X8 <- as.numeric(income1920$X8)
+income1920$X9 <- as.numeric(income1920$X9)
+income1920$X10 <- as.numeric(income1920$X10)
+
+## Stacking the five datasets and naming columns
+income1112 <- income1112 %>%
+  mutate(X11 = 2012)
+income1314 <- income1314 %>%
+  mutate(X11 = 2014)
+income1516 <- income1516 %>%
+  mutate(X11 = 2016)
+income1718 <- income1718 %>%
+  mutate(X11 = 2018)
+income1920 <- income1920 %>%
+  mutate(X11 = 2020)
+
+income_df <- bind_rows(income1112, income1314, income1516, income1718, income1920)
+
+colnames(income_df) <- c("msoa",
+                    "MSOA_name",
+                    "local_authority_code",
+                    "local_authority_name",
+                    "region_code",
+                    "region_name",
+                    "total_annual_income",
+                    "upper_confidence_limit",
+                    "lower_confidence_limit",
+                    "confidence_interval",
+                    "year")
+
+## Data is recorded every two years and need to be duplicate for odd years and selecting columns
+income_df_odd <- income_df %>%
+  mutate(year = year - 1)
+
+income_df <- bind_rows(income_df, income_df_odd)
+
+income_df <- income_df %>%
+  select(msoa, MSOA_name, region_name, local_authority_code, total_annual_income, confidence_interval, year)
+
+# Clean population by postcode
+population_df <- population_df %>%
+  select(-3,-4) %>%
+  rename("postcode" = "X1", "population" = "X2", "households" = "X5")
+
+# Clean postcode to local area
+postcode_df <- postcode_df |>
+  select(pcds, msoa21cd, ladnm, ladcd) |>
+  rename("postcode" = "pcds",
+         "msoa" = "msoa21cd", 
+         "local_authority_name" = "ladnm",
+         "local_authority_code" = "ladcd")
+
+# Merge to main dataset
+final_df <- df
+
+final_df <- final_df %>%
+  left_join(postcode_df, by = "postcode")
+
+final_df <- final_df %>%
+  left_join(population_df, by = "postcode")
+
+final_df <- final_df %>%
+  left_join(income_df, by = c("msoa","year"))
+
+final_df <- final_df %>%
+  left_join(pollution_df, by = "local_authority_name")
+
+final_df <- final_df %>%
+  select(-deed_date,
+         -saon,
+         -paon,
+         -street,
+         -locality,
+         -transaction_category,
+         -local_authority_name,
+         -MSOA_name,
+         -region_name)
+
+# Clean time series dataset
+inflation_df <- inflation_df %>% 
+  mutate(date = as.Date(paste0(X1, 1), format= "%Y %b%d")) %>%
+  mutate(year = as.numeric(format(date, format="%Y")), 
+         month = as.numeric(format(date, format="%m"))) %>%
+  mutate(CPI = (X2)/(X2[1:1])*100) %>%
+  select(year, month, CPI)
+
+bank_rate_df <- bank_rate_df %>%
+  slice(0:72) %>%
+  mutate(date = as.Date(`Date Changed`, format=("%d %b %y"))) %>%
+  mutate(year = as.numeric(format(date, format="%Y")), 
+         month = as.numeric(format(date, format="%m"))) %>%
+  select(year, month, "rate"=Rate)
+
+time_df <- inflation_df %>%
+  left_join(bank_rate_df, by = c("year","month")) %>%
+  na.locf(na.rm=FALSE)
+
+time_df[1,4] = 6.13
+
+price_nb_df <- final_df %>%
+  group_by(year, month) %>%
+  summarise(nb_transac = n(),
+            mean_price = mean(price_paid))
+
+price_nb_df <- price_nb_df %>%
+  mutate(month, month = as.numeric(month))
+
+time_df <- time_df %>%
+  left_join(price_nb_df, by = c("year", "month"))
+
+time_df <- time_df %>%
+  mutate(real_price = (time_df$mean_price/time_df$CPI)*100) %>%
+  mutate(date = lubridate::make_date(year = time_df$year, month = time_df$month, day = 1)) %>%
+  select(-month, -year) %>%
+  filter(nb_transac > 10000) # data for the last month might be incomplete and could introduce a bias
+```
+
+## Data exporting
+
+```{r}
+#| eval: false
+
+# Save final datasets
+saveRDS(final_df, here("data","full_final_df.rds"))
+saveRDS(income_df, here("data", "income_df.rds"))
+saveRDS(postcode_df, here("data", "postcode_df.rds"))
+saveRDS(time_df, here("data","full_time_df.rds"))
+saveRDS(population_2021_df, here("data", "population_df.rds"))
+```
