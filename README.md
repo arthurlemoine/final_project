@@ -4,6 +4,10 @@ The main datasets used for this project exceed the Github file size limit (100MB
 
 To reproduce our work please download and save the following files in a folder named "data" in your own repository.  
 
+You may also use the final datasets available from: 
+
+https://www.dropbox.com/scl/fo/9c04715s1hkowsf0vnk70/h?rlkey=7r3x8pm6y9nkcdiusfhmq2ulb&dl=0
+
 # 1. UK real estate transactions
 
 http://prod.publicdata.landregistry.gov.uk.s3-website-eu-west-1.amazonaws.com/pp-complete.csv
@@ -19,15 +23,10 @@ https://www.arcgis.com/sharing/rest/content/items/3770c5e8b0c24f1dbe6d2fc6b46a0b
 This file will be used to combine datasets with different geographical scales. 
 Save it as 'postcode_to_area.csv'.
 
-# 3. Income, pollution and population
+# 3. Income and population
 
 Those datasets (pre-processed) are available directly from our Github. 
 If you want the raw initial data please download and merge the following datasets. 
-
-- Pollution (3 files to be merged and add a column year):
-* https://compliance-data.defra.gov.uk/datasets/Defra::pm10-annual-mean-local-authority-2020/
-* https://compliance-data.defra.gov.uk/datasets/Defra::pm10-annual-mean-local-authority-2021/
-* https://compliance-data.defra.gov.uk/datasets/Defra::pm10-annual-mean-local-authority-2022/
 
 - Population (single file):
 * https://www.nomisweb.co.uk/census/2011/postcode_headcounts_and_household_estimates
